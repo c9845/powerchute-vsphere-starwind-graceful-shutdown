@@ -190,7 +190,7 @@ if (!$exists) {
     $config.VCenter.DatacenterName = Read-Host -Prompt "Enter your vCenter datacenter name"
     
     $config.ESXi.Host1IP = Read-Host -Prompt "Enter your first ESXi server IP"
-    $config.ESXi.Host2IP = Read-Host -Prompt "Enter your seccond ESXi server IP"
+    $config.ESXi.Host2IP = Read-Host -Prompt "Enter your second ESXi server IP"
     $config.ESXi.Username = Read-Host -Prompt "Enter your ESXi username (should be a minimal-permissioned user solely used for this script)"
     $config.ESXi.Password = Read-Host -Prompt "Enter your ESXi user's password"
     
