@@ -33,16 +33,16 @@ ESXi Permissions (create matching users on both hosts):
 
 ## Testing:
 1) Set the configuration fields `DoVMShutdowns`, `DoVcenterShutdown`, `DoStarWindMaintance`, and/or `DoESXiShutdowns` to `false` (note that there are no quotes). This will prevent shutdown commands from running against your in-production infrastructure but you will be able to inspect the logging output for expected results.
-1) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less important VMs (in vSphere). Set the configuration field `Tag` to the same "test-vm-apc-shutdown" string. Run this script to make sure only your tagged VMs are logged for shutting down.
-1) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less important VMs. Set the configuration field `Tag` to the same "test-vm-apc-shutdown" string. Set the configuration field `DoVMShutdowns` field to `true`. Run this script and check if only your tagged VMs were shut down.
-1) During **non-production hours**, set the configuration field `Tag` to "" and set `DoVMShutdowns` to true. Run this script and check if all your VMs are shut down (except vCenter and StarWind VMs).
-1) During **non-production hours**, set the configuration field `DoVcenterShutdown` to `true`, run this script, and check if vCenter is shut down.
-1) During **non-production hours**, set the configuration field `DoStarWindMaintance` field to `true`, run this script, and check if the StarWind devices are put into maintance mode. You will need a system with StarWind Management Console to view the status of maintance mode. Make sure all your VMs are turned off first (or will be turned off via this script).
-1) During **non-production hours**, set the configuration field `DoESXiShutdowns` field to `true`, run this script, and check if your ESXi hosts are shut down. The StarWind appliance VMs should automatically be shut down first. Make sure all your VMs are turned off first (or will be turned off via this script).
+1) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less important VMs (in vSphere). Set the configuration field `Tag` to the same "test-vm-apc-shutdown" string. Run this script manually via powershell to make sure only your tagged VMs are logged for shutting down.
+1) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less important VMs. Set the configuration field `Tag` to the same "test-vm-apc-shutdown" string. Set the configuration field `DoVMShutdowns` field to `true`. Run this script manually via powershell and check if only your tagged VMs were shut down.
+1) During **non-production hours**, set the configuration field `Tag` to "" and set `DoVMShutdowns` to true. Run this script manually via powershell and check if all your VMs are shut down (except vCenter and StarWind VMs).
+1) During **non-production hours**, set the configuration field `DoVcenterShutdown` to `true`, run this script manually via powershell, and check if vCenter is shut down.
+1) During **non-production hours**, set the configuration field `DoStarWindMaintance` field to `true`, run this script manually via powershell, and check if the StarWind devices are put into maintance mode. You will need a system with StarWind Management Console to view the status of maintance mode. Make sure all your VMs are turned off first (or will be turned off via this script).
+1) During **non-production hours**, set the configuration field `DoESXiShutdowns` field to `true`, run this script manually via powershell, and check if your ESXi hosts are shut down. The StarWind appliance VMs should automatically be shut down first. Make sure all your VMs are turned off first (or will be turned off via this script).
 
 ## Production Use:
 1) Set the configuration fields `DoVMShutdowns`, `DoVcenterShutdown`, `DoStarWindMaintance`, and/or `DoESXiShutdowns` fields to `true`.
-1) Set the proper log file directory and set the configuration field 1WriteToFile1 to `true`. Make sure permissions to write to the log file directory are set properly.
+1) Set the proper log file directory and set the configuration field `WriteToFile` to `true`. Make sure permissions to write to the log file directory are set properly.
 1) Remove the configuration field `Tag` by setting it to "".
 1) Set up a cmd file to call this powershell script.
     - This is needed because PCNS cannot call a powershell script directly.
@@ -62,11 +62,12 @@ ESXi Permissions (create matching users on both hosts):
 - You could run this script on an Ubuntu (or other Linux OS) since powershell is available on Linux as [powershell-core](https://github.com/PowerShell/PowerShell). However, you would not have access to the StarWind Management Console (Windows application) for diagnostics during restart of your infrastructure. Plus, getting the StarWind powershell module installed is a bit of a pain (you have to export it from a Windows machine where has already been installed).
 - IPs are preferred over FQDNs since your domain controllers may be running as VMs on your primary cluster and therefore would be shut down by this script possibly causing lookup issues (i.e. looking up IP of ESXi server after all VMs are shut down).
 
-## Currently Testing Configuration:
-- vSphere 7U2 (ESXi and vCenter).
-- StarWind vSAN 8.
+## Currently Tested/Running Configuration:
+- 2-node vSphere 7U2 (ESXi and vCenter).
+- StarWind vSAN 8 running on linux VMs.
 - PowerChute Network Server 4.4.1.
-- APC NMC 3.
+- Dual APC UPSes, each with NMC 3.
+- Intel NUC8 (quad core, 8GB RAM, 256 SSD) as host for VM running PCNS.
 - Windows Server 2016 as the host OS for PCNS.
 - VMware PowerCLI 12.2.0 build 17538434 (component versions 12.3).
 

@@ -12,6 +12,7 @@ System administrators who are running a StarWind vSAN cluster and vSphere. Admin
 1) Install PowerChute Network Server (PCNS).
 1) Set up the powershell script.
 1) Testing.
+1) Run in Production.
 
 ## Target/Required Infrastructure:
 - 2-node vSphere cluster running StarWind vSAN.
@@ -42,11 +43,11 @@ This guide is used for deploying a system completely independent from the primar
 - You should have AC Power Recovery set up in the BIOS for the system running the PCNS software. If this server is an ESXi host, then you should set the VM running PCNS to start up automatically.
 - If you use **redundant** UPSes, note that PCNS will *not* trigger a command file to run unless both UPSes encounter the same issue. This is a bit unexpected and very poorly documented in the APC documents.
 
-## Decisions & Assumptions:
+## Decisions, Assumptions, Misc.:
 - An Intel NUC is used to run the independent system since it is relatively low cost, low power, and easy to fit in a server rack.
 - Running Windows on the independent system is driven by two points:
-  1) Being able to run the StarWind Management Console application for diagnostics.
-  2) Providing a system to access via remote desktop from a remote location to handle restarting your infrastructure after a 
+  - Being able to run the StarWind Management Console application for diagnostics.
+  - Providing a system to access via remote desktop from a remote location to handle restarting your infrastructure after a 
   power failure has ended (i.e.: starting up the nodes, checking status of StarWind VMs, exiting maintenance mode on the StarWind VMs, and starting up your production VMs).
 - ESXi is installed on the NUC with Windows running as a VM, instead of just installing Windows on the NUC, to provide a lower-level management tool since the NUC is designed to be deployed headless. If Windows encounters an issue you can diagnose it through ESXi.
 - The independent Windows system should be as minimal as possible. It should not even be domain joined since your domain controllers may all be VMs running on the primary cluster. We just need a VM we can access remotely and manage the primary cluster from. You should still have some sort of VPN or other method preventing direct access to this VM from the WAN.
@@ -220,7 +221,7 @@ While you could deploy an Ubuntu VM in place of Windows (you can run APC PowerCh
 		- VirtualMachine > Interact > PowerOff (to shut down VMs).
 1) Open a powershell window and navigate to the `C:\Program Files\APC\PowerChute\user_files` directory.
 1) Run the `powerchute-vsphere-starwind-shutdown.ps1` script and follow the prompts to save your configuration.
-	- Set all the "Do...Shutdown" fields to "n" for testing purposes.
+	- Set all the `Do...` fields to "n" for testing purposes.
 	- When prompted to saves logs to a file, provide "n". This is just for testing.
 1) You should now have a `powerchute-vsphere-starwind-shutdown.config` file located in the same directory.
 	- This is the configuration file.
@@ -233,9 +234,17 @@ While you could deploy an Ubuntu VM in place of Windows (you can run APC PowerCh
 	- All VMs should have been targeted but none should have been shut down.
 	- vCenter and ESXi should not have been shut down either.
 	- StarWind VMs should not have been shut down and devices should not have been put in maintance mode.
+
+## Testing:
+*You should test this script manually by running it in powershell with logging turned off, so it is output to the powershell window, so that you can verify the script works as intended without getting PCNS involved. Plus, you will be able to test quicker without having to worry about PCNS events needing to be trigged.*
+
+1) Test this script many times using the `Do...` configuration file fields set to `false` initially and then setting them to `true` one by one. See the README for more info. 
 1) Test the script via PCNS.
 	- Edit the `powerchute-vsphere-starwind-shutdown.config` file setting the `WriteToFile` field to `true`.
 		- Make sure a valid directory is provided for the field `PathToDirectory`.
+	- Edit the `powerchute-vsphere-starwind-shutdown.config` file setting the `Do...` fields to `false`.
+		- Enable each field one-by-one ensuring each works as expected first.
+		- Make sure you are enabling these fields and testing during off-hours!
 	- Open a browser and navigate to the PCNS port (https://localhost:6547 from the independent system).
 	- Navigate to "Configure Events".
 	- Choose an easy to test event, such as "PowerChute cannot communicate with the NMC" and click the gear under "Command File".
@@ -280,5 +289,7 @@ While you could deploy an Ubuntu VM in place of Windows (you can run APC PowerCh
 	- Click Apply.
 1) Done! The script should now run after the UPS has been running on battery for 10 minutes causing the VMs and hosts to shut down.
 
-**TODO**
+---
+
+# TODO
 - Document NMC settings and why we have them set as they are. The battery runtime settings, max delay, etc. Although we don't really use these.
