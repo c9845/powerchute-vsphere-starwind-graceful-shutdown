@@ -1,7 +1,7 @@
 # powerchute-vsphere-starwind-shutdown
 
 ## Introduction:
-This script handles shutting down a vSphere environment in a safe manner during a utility power failure to reduce the chances of data corruption. This script is designed to be run by APC's PowerChute Network Server software against a 2-node vSphere cluster running StarWind's hyperconverged vSAN storage solution.
+These scripts handle shutting down or consolidating a vSphere environment during a power loss event. The entire infrastructure can be shut down or VMs can be consolidated to a single host. You can also combine these scripts to run at the start of a power loss and when a longer-term power loss event occurs and your battery backups will die. These scripts are designed to be run by APC's PowerChute Network Server software against a 2-node vSphere cluster running StarWind's hyperconverged vSAN storage solution.
 
 
 ## Target/Required Infrastructure:
