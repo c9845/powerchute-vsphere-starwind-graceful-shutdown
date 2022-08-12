@@ -1,38 +1,53 @@
 <#
 INTRODUCTION:
-This script handles shutting down a vSphere environment in a safe manner during a utility
-power failure to reduce teh chances of data corruption. This script is designed to be run
-by APC's PowerChute Network Server software against a 2-node vSphere cluster running
-StarWind's hyperconverged vSAN storage solution.
+This script handles shutting down a vSphere environment in a safe manner during a 
+utility power failure to reduce the chances of data corruption. This script is 
+designed to be run by APC's PowerChute Network Server software against a 2-node 
+vSphere cluster running StarWind's hyperconverged vSAN storage solution.
+
+REQUIREMENTS:
+    - 2-node vSphere cluster.
+    - StarWind HCA vSAN.
+    - APC UPSes with NMC3 network cards.
+    - APC PowerChute Network Shutdown server application.
+    - Network connectivity between APC UPSes, APC PowerChute, and vSphere.
 
 DETAILS:
-This script will attempt to gracefully shut down all your VMs (except vCenter and the
-StarWind storage VMs), then non-gracefully power off any VMs that do not shut down quickly
-enough, then shut down vCenter, put StarWind into maintance mode, and finally shut down 
-the ESXi hosts (which will in turn shut down the StarWind storage VMs). This order of 
-operations is designed to limit the chances of data corruption on the StarWind vSAN VMs
-and ensure the infrastructure can be restarted quickly (little resynchronization time).
+The following steps occur:
+    - All VMs (except vCenter and StarWind) are gracefully shut down (guest OS shutdown).
+    - Any remaining running VMs (except vCenter and StarWind) are then forcefully
+      shut down (power off).
+    - vCenter is shut down.
+    - StarWind storage is put into maintance mode.
+    - ESXi hosts are shut down (which shuts down the StarWind VMs).
 
-This script must run on a host that is independent of your vSphere environment. This is
-done because if this script ran on a VM inside the vSphere environment, it would not be
-able to shutdown the environment properly because the VM itself would be shut down. An
-idea would be to purchase a small, low power computer (such as an Intel NUC) and run this
-script on it. The system running the PowerChute software and this script does become a
-single point of failure so please take not of that in your planning (you could potentially
-run redundant systems with PowerChute and this script monitoring your same UPS(s) but how
-to handle the race condition between the two hosts becomes a bit problematic)
+This script will attempt to gracefully, then forcefully, get all VMs to shutdown before
+shutting down the StarWind storage VMs that present all the storage your VMs are most
+likely running on. This order of operations is designed to limit the chances of data 
+corruption on the StarWind vSAN VMs and ensure the infrastructure can be restarted 
+quickly (little StarWind resynchronization time).
 
-The configuration needed to run this script is generated upon the first-run when you run
-this script interactively (in a powershell window). A JSON formatted configuration file is
-saved to the same directory this script is located in. Note that the configuration file will
-include the passwords to your vSphere system, ESXi hosts, and StarWind management port. You
-should create separate users and roles for vSphere and ESXi with minimal permissions to
-protect against misuse. You should also make sure the system running PowerChute and this
-script are hardened (it is best to use a non-domain joined system). Powershell secure-string
-is not used since doing so is difficult because APC PowerChute runs commands as the
-NT Authority/System user but it is very difficult to create and store secure-string passwords
-as this user (you need to use the same user to create a secure-string as you will read said
-secure string).
+This script must run on a host that is independent of your vSphere environment. This 
+is necessary since if APC PowerChute is run on a VM inside the vSphere environment, 
+the APC VM would be itself be shutdown and therefore the script would not be able to
+run to completion. An idea would be to purchase a small, low power computer (such as 
+an Intel NUC) and PowerChute, and this script, on it. The system running the PowerChute 
+software and this script does become a single point of failure so please take note of 
+that in your planning (you could potentially run redundant systems with PowerChute and 
+this script monitoring your same UPS(s) but how to handle the race condition between 
+the two PowerChute hosts becomes a bit problematic).
+
+The configuration needed to run this script is generated upon the first-run when you 
+run this script interactively (in a powershell window). A JSON formatted configuration 
+file is saved to the same directory this script is located in. Note that the 
+configuration file will include the passwords to your vSphere system, ESXi hosts, and 
+StarWind management port. You should create separate users and roles for vSphere and 
+ESXi with minimal permissions to protect against misuse. You should also make sure the 
+system running PowerChute and this script are hardened (it is best to use a non-domain 
+joined system). Powershell secure-string is not used since doing so is difficult 
+because APC PowerChute runs commands as the NT Authority/System user but it is very 
+difficult to create and store secure-string passwords as this user (you need to use 
+the same user to create a secure-string as you will read said secure string).
 
 vSphere Permissions:
     - Host > Inventory > Modify Cluster (to disable vSphere High Availability).
@@ -46,26 +61,26 @@ You should never have to modify this script directly!
 
 TESTING:
 1) Set the DoVMShutdowns, DoVcenterShutdown, DoStarWindMaintance, and/or DoESXiShutdowns
-   variables to false (note no quotes).  This will prevent shutdown commands from running 
-   against your in-production infrastructure but you will be able to inspect the logging 
-   output for expected results.
-2) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less important
-   VMs. Set the Tag in the config file to the same "test-vm-apc-shutdown" tag. Run this 
-   script to make sure only your tagged VMs are logged for shutting down.
-3) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less important
-   VMs. Set the Tag in the config file to the same "test-vm-apc-shutdown" tag. Set the 
-   DoVMShutdowns field to true. Run this script and check if only your tagged VMs were shut
-   down.
-4) Set the Tag to "" and set DoVMShutdowns to true. During NON-PRODUCTION-HOURS, run this
-   script and check if all your VMs are shut down (except vCenter and StarWind VMs).
-5) Set the DoVcenterShutdown field to true, run this script, and check if vCenter is shut
-   down. Not during production hours!
-6) Set the DoStarWindMaintance field to true and check if the StarWind devices are put into
-   maintance mode. You will need a system with StarWind Management Console to view the status
-   of maintance mode. Again, not during production hours and make sure all your VMs are turned
-   off first (or will be turned off via this script).
-7) Set the DoESXiShutdowns field to true, run this script, and check if your ESXi hosts are
-   shut down. The StarWind appliance VMs should automatically be shut down first.
+   variables to false (note no quotes).  This will prevent shutdown commands from 
+   running against your in-production infrastructure but you will be able to inspect 
+   the logging output for expected results.
+2) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less 
+   important VMs. Set the Tag in the config file to the same "test-vm-apc-shutdown" 
+   tag. Run this script to make sure only your tagged VMs are logged for shutting down.
+3) Set the tag "test-vm-apc-shutdown" on a few of your test, development, or less 
+   important VMs. Set the Tag in the config file to the same "test-vm-apc-shutdown" 
+   tag. Set the DoVMShutdowns field to true. Run this script and check if only your 
+   tagged VMs were shut down.
+4) Set the Tag to "" and set DoVMShutdowns to true. During NON-PRODUCTION-HOURS, run 
+   this script and check if all your VMs are shut down (except vCenter and StarWind VMs).
+5) Set the DoVcenterShutdown field to true, run this script, and check if vCenter is 
+   shut down. Not during production hours!
+6) Set the DoStarWindMaintance field to true and check if the StarWind devices are put 
+   into maintance mode. You will need a system with StarWind Management Console to 
+   view the status of maintance mode. Again, not during production hours and make sure 
+   all your VMs are turned off first (or will be turned off via this script).
+7) Set the DoESXiShutdowns field to true, run this script, and check if your ESXi hosts 
+   are shut down. The StarWind appliance VMs should automatically be shut down first.
 
 PRODUCTION USE:
 1) Set the DoVMShutdowns, DoVcenterShutdown, DoStarWindMaintance, and/or DoESXiShutdowns
@@ -75,60 +90,55 @@ PRODUCTION USE:
 3) Remove the Tag by setting it to "".
 
 NOTES:
-- You will need to run this script interactively, in a powershell window, initially to create
-  and save the configuration file. You can edit the configuration file manually after it is
-  created.
-- There is VERY LITTLE error handling in this script. It is advised to heavily test this
-  script during non-work hours to check for errors.
+- You will need to run this script interactively, in a Powershell window, initially to 
+  create and save the configuration file. You can edit the configuration file manually 
+  after it is created.
+- There is VERY LITTLE error handling in this script. It is advised to heavily test 
+  this script during non-work hours to check for errors.
 - You should ensure your UPS(s) have adequate runtime to allow this script to run to
   completion. You should also ensure your UPS(s) are configured with the proper runtime
   delays, wait times, etc.
-- You could run this script on an Ubuntu (or other Linux OS) since powershell is available
-  on Linux as powershell-core. However, you would not have access to the StarWind
-  Management Console (Windows application) for diagnostics during restart of your 
-  infrastructure.
 #>
 
 
-#-------------------------------------------------------------------------------------
-#Define configuration. This information is prompted for upon first run (running this script
-#interactively) and is saved to a JSON file. This information is read from the JSON file on 
-#subsequent runs. Doing so keeps the configuration separate from the script so that an 
-#end-user does not need to modify this script's contents at all.
+#------------------------------------------------------------------------------------
+#Define configuration. This information is prompted for upon first run (running this 
+#script interactively) and is saved to a JSON file. This information is read from the 
+#JSON file on subsequent runs. Doing so keeps the configuration separate from the 
+#script so that an end-user does not need to modify this script's contents at all.
 $config = [PSCustomObject]@{
     #user credentials and systems to connect to.
     VCenter                      = [PSCustomObject]@{
-        IP             = "10.168.172.100" #IP is recommended over FQDN to prevent DNS issues.
-        VMName         = "VMware vCenter Server" #name as shown in vSphere Web Client; used to skip when listing running VMs to prevent shutting down vCenter server prematurely.
-        Username       = "non-admin@vsphere.local" #make sure this user only has minimal permissions to shut down VMs and disable vSphere High Availability.
+        IP             = "10.168.172.100"          #IP is recommended over FQDN to prevent DNS issues since DNS servers may be getting shut down.
+        VMName         = "VMware vCenter Server"   #Name as shown in vSphere Web Client, used to skip this VM when listing running VMs to prevent shutting down vCenter server prematurely.
+        Username       = "non-admin@vsphere.local" #Make sure this user only has minimal permissions to shut down VMs and disable vSphere High Availability.
         Password       = ""
-        ClusterName    = "Cluster" #your cluster name in vSphere.
-        DatacenterName = "Datacenter" #your datacenter name in vSphere.
+        ClusterName    = "Cluster"    #Your cluster name in vSphere, needed to disabled vSphere High Availability.
     }
     ESXi                         = [PSCustomObject]@{
         Host1IP  = "10.168.172.201" #IP is recommended over FQDN to prevent DNS issues.
         Host2IP  = "10.168.172.202" #IP is recommended over FQDN to prevent DNS issues.
-        Username = "non-admin" #make sure this user only has minimal permissions to shut down VMs and shut down the host.
+        Username = "non-admin" #Make sure this user only has minimal permissions to shut down VMs and shut down the host.
         Password = ""
     }
     StarWind                     = [PSCustomObject]@{
-        VM1IP    = "10.168.172.221" #used to connect via StarWind powershell module to enter maintence mode for storage. we only need one IP since this will handle storage on both StarWind VMs.
-        VM1Name  = "SW-HCA-VM-01" #name as shown in vSphere Web Client; used to skip when listing running VMs to prevent shutting down StarWind storage appliance prematurely.
-        VM2Name  = "SW-HCA-VM-02" #name as shown in vSphere Web Client; used to skip when listing running VMs to prevent shutting down StarWind storage appliance prematurely.
-        Username = "" #not the same as GUI/console username and password, ask starwind for help.
-        Password = "" #not the same as GUI/console username and password, ask starwind for help.
+        VM1IP    = "10.168.172.221" #Used to connect via StarWind powershell module to enter maintence mode for storage. We only need one IP since this will handle storage on both StarWind VMs.
+        VM1Name  = "SW-HCA-VM-01"   #Name as shown in vSphere Web Client; used to skip when listing running VMs to prevent shutting down StarWind storage appliance prematurely.
+        VM2Name  = "SW-HCA-VM-02"   #Name as shown in vSphere Web Client; used to skip when listing running VMs to prevent shutting down StarWind storage appliance prematurely.
+        Username = ""               #Not the same as GUI/console username and password, ask StarWind for help.
+        Password = ""               #Not the same as GUI/console username and password, ask StarWind for help.
     }
 
     #script configuration
-    DoVMShutdowns                = $false #if VMs should be shut down.
-    DoVcenterShutdown            = $false #if vCenter should be shut down.
-    DoStarWindMaintance          = $false #if StawWind storage devices should be placed in maintance mode preventing reads and writes.
-    DoESXiShutdowns              = $false #if ESXi hosts should be shut down.
+    DoVMShutdowns                = $false #If VMs should be shut down.
+    DoVcenterShutdown            = $false #If vCenter should be shut down.
+    DoStarWindMaintance          = $false #If StawWind storage devices should be placed in maintance mode preventing reads and writes.
+    DoESXiShutdowns              = $false #If ESXi hosts should be shut down.
 
-    WaitForGracefulShutdownDelay = 180 #how many seconds to wait for successful shutdown of VMs after issuing shutdown commands to each (default: 180).
-    WaitForNonGracefulDelay      = 30 #how many seconds to wait for successful power-off of VMs after issuing power-off commands to each (default: 30).
-    WaitForvCenterShutdownDelay  = 120 #how many seconds to wait for successful shutdown of vCenter VM after issuing shutdown command (default: 120).
-    WaitBetweenHostShutdowns     = 60 #how many seconds to wait between shutting down each ESXi host (default: 60).
+    WaitForGracefulShutdownDelay = 180 #How many seconds to wait for successful shutdown of VMs after issuing shutdown commands to each (default: 180).
+    WaitForNonGracefulDelay      = 30  #How many seconds to wait for successful power-off of VMs after issuing power-off commands to each (default: 30).
+    WaitForvCenterShutdownDelay  = 120 #How many seconds to wait for successful shutdown of vCenter VM after issuing shutdown command (default: 120).
+    WaitBetweenHostShutdowns     = 60  #How many seconds to wait between shutting down each ESXi host (default: 60).
 
     #A vSphere tag applied to the VMs you want to shut down. This is used for testing 
     #purposes by only shutting down certain VMs (i.e.: your development or test VMs)
@@ -139,8 +149,8 @@ $config = [PSCustomObject]@{
     Tag                          = "test-vm-apc-shutdown"
 
     Logging                      = [PSCustomObject]@{
-        WriteToFile     = $false #set to $true to write logging to a file, set to $false to write to terminal. $true should be used for production so you can inspect logs
-        PathToDirectory = "C:\powerchute-vsphere-starwind-shutdown-logs\" #path to location where log files will be saved. Make sure you have permission to write to this location.
+        WriteToFile     = $false                                          #Set to $true to write logging to a file, set to $false to write to terminal. $true should be used for production so you can inspect logs
+        PathToDirectory = "C:\powerchute-vsphere-starwind-shutdown\" #Path to location where log files will be saved. Make sure you have permission to write to this location.
     }
 
     #Email server configuration is used to send an alert when this script is run. This
@@ -152,13 +162,13 @@ $config = [PSCustomObject]@{
         Enable    = $false
         Server    = "emails.example.com" #IP or FQDN of your email server.
         Port      = 25 #email server SMTP port (default: 25).
-        Recipient = "recipient@example.com" #who email will be sent to.
+        Recipient = "to@example.com" #who email will be sent to.
         From      = "powerchute-vsphere-starwind-shutdown@example.com" #who email will be sent from.
     }
 }
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Some defaults for use when gathering user input and building configuration.
 $defaultWaitForGracefulShutdownDelay = 180
 $defaultWaitForNonGracefulDelay = 30
@@ -167,11 +177,11 @@ $defaultWaitBetweenHostShutdowns = 60
 $defaultSMTPPort = 25
 
 
-#-------------------------------------------------------------------------------------
-#Check if configuration file exists, otherwise prompt user for data to build configuration.
-#The configuration file should be stored in the same directory as this script. If the file
-#does not exist, it will be created. The directory noted is the directory from where Power
-#Chute can run scripts from.
+#------------------------------------------------------------------------------------
+#Check if configuration file exists, otherwise prompt user for data to build 
+#configuration. The configuration file should be stored in the same directory as this 
+#script. If the file does not exist, it will be created. The directory noted is the 
+#directory from where powerchute can run scripts from.
 $configFileName = "powerchute-vsphere-starwind-shutdown.config"
 $scriptRunningDirectory = "C:\Program Files\APC\PowerChute\user_files"
 $pathToConfigFile = Join-Path -Path $scriptRunningDirectory -ChildPath $configFileName
@@ -187,7 +197,6 @@ if (!$exists) {
     $config.VCenter.Username = Read-Host -Prompt "Enter your vCenter username (should be a minimal-permissioned user solely used for this script)"
     $config.VCenter.Password = Read-Host -Prompt "Enter your vCenter user's password"
     $config.VCenter.ClusterName = Read-Host -Prompt "Enter your vCenter cluster name"
-    $config.VCenter.DatacenterName = Read-Host -Prompt "Enter your vCenter datacenter name"
     
     $config.ESXi.Host1IP = Read-Host -Prompt "Enter your first ESXi server IP"
     $config.ESXi.Host2IP = Read-Host -Prompt "Enter your second ESXi server IP"
@@ -289,8 +298,8 @@ else {
 }
 
 
-#-------------------------------------------------------------------------------------
-#Calidate the config file (since user could have changed it manually).
+#------------------------------------------------------------------------------------
+#Validate the config file (since user could have changed it manually).
 if ($config.VCenter.IP -eq "") {
     Write-Host "No vCenter IP provided in config file."
     exit
@@ -309,10 +318,6 @@ if ($config.VCenter.Password -eq "") {
 }
 if ($config.VCenter.ClusterName -eq "") {
     Write-Host "No vCenter cluster name provided in config file."
-    exit
-}
-if ($config.VCenter.DatacenterName -eq "") {
-    Write-Host "No vCenter datacenter name provided in config file."
     exit
 }
 if ($config.ESXi.Host1IP -eq "") {
@@ -411,13 +416,13 @@ if ($config.Emails.Enable) {
 }
 
 
-#-------------------------------------------------------------------------------------
-#Define list of VMs that we will ignore from shutting down. These VMs are vCenter server,
-#the StarWind VMs, and any other VMs that are somehow separately managed.
-$ignoredVMNames = @($vcenterVMName, $starwindVM1Name, $starwindVM2Name)
+#------------------------------------------------------------------------------------
+#Define list of VMs that we will ignore from shutting down. These VMs are vCenter 
+#server, the StarWind VMs, and any other VMs that are somehow separately managed.
+$ignoredVMNames = @($config.VCenter.VMName, $config.StarWind.VM1Name, $config.StarWind.VM2Name)
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Set up logging for diagnostics.
 #Define function for handling logging. This cleans up the code base a bit and allows
 #us to switch between logging to a file and logging to a terminal easily.
@@ -467,17 +472,17 @@ if ($config.DoStarWindMaintance -eq $false) {
 Write-Log -Line ""
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Additional warning logging if tag is enabled since this should only be used for testing
-#and not all (if any VMs) will be affected (i.e. shut down). This is separated from warnings
-#above so that it stands out more in logging.
+#and not all (if any VMs) will be affected (i.e. shut down). This is separated from 
+#warnings above so that it stands out more in logging.
 if ($config.Tag -ne "") {
     Write-Log -Line "WARNING! VM tag ($($config.Tag)) set, not all VMs will be sent shutdown commands. This should ONLY be used during testing."
     Write-Log -Line ""
 }
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Some error checking. This is used to make sure we are shutting down child elements
 #if we are shutting down parents (i.e.: don't shut down hosts without first shutting
 #down VMs).
@@ -499,7 +504,7 @@ if ($config.DoStarWindMaintance -and !$config.DoVcenterShutdown) {
 }
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Send email alert that this script is running.
 #Note taht Send-MailMessage is obsolete but it still works as of now. This is way easier
 #than having to import a third-party mail client for powershell.
@@ -516,7 +521,7 @@ if ($config.Emails.Enable) {
 }
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Create powershell credentials for use with PowerCLI to connect to vCenter and ESXi.
 $vcenterPasswordSS = ConvertTo-SecureString $config.VCenter.Password -AsPlainText -Force
 $vcenterCredentials = New-Object System.Management.Automation.PSCredential ($config.VCenter.Username, $vcenterPasswordSS)
@@ -525,7 +530,7 @@ $esxiPasswordSS = ConvertTo-SecureString $config.ESXi.Password -AsPlainText -For
 $esxiCredentials = New-Object System.Management.Automation.PSCredential ($config.ESXi.Username, $esxiPasswordSS)
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Connect to vCenter.
 
 #Disable prompts/logging about sending diagnostics to VMware. This just cleans up logging
@@ -552,13 +557,13 @@ else {
 }
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Diable vSphere High Availability (HA) on the cluster. This is done to prevent issues
 #where VMs are restarted unexpectedly during this shutdown process or when the cluster
 #starts up again.
 Write-Log -Line "Disabling vSphere High Availability on the cluster $($config.VCenter.ClusterName)..."
 if ($config.DoESXiShutdowns) {
-    Get-Cluster $config.VCenter.ClusterName | Set-Cluster -HAEnabled:$false -confirm:$false
+    Get-Cluster $config.VCenter.ClusterName | Set-Cluster -HAEnabled:$false -confirm:$false | Out-Null
     Write-Log -Line "Disabling vSphere High Availability on the cluster $($config.VCenter.ClusterName)...done"
 }
 else {
@@ -566,10 +571,10 @@ else {
 }
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Get the list of VMs to shutdown.
-#Sorting alphabetically just helps with organizing logging.
-#Tag is used for limiting which VMs this script will send shutdown commands to.  A tag
+#
+#Tag is used for limiting which VMs this script will send shutdown commands to. A tag
 #should ONLY be set for TESTING purposes otherwise some VMs may be missed from being
 #shutdown and could be corrupted when the StarWind storage enters maintance mode
 #(preventing all access to the vSphere disks).
@@ -583,7 +588,7 @@ else {
 }
 Write-Log -Line "Getting list of running VMs in cluster $($config.VCenter.ClusterName) to shut down...done"
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Issue graceful shutdown commands to each running VM. This will use VMware tools to
 #send a "shutdown guest" command which should tell each VM to shutdown gracefully. This
 #depends on your VMware tools shutdown command for each VM set in vSphere. The default
@@ -591,8 +596,8 @@ Write-Log -Line "Getting list of running VMs in cluster $($config.VCenter.Cluste
 #the VM, a non-graceful shutdown (power off) will be performed.
 Write-Log -Line "Sending graceful shutdown commands to VMs..."
 ForEach ($vm in $poweredOnVMs) {
-    #Make sure we don't shut down the vcenter server or starwind storage VMs.
-    #The vCenter server needs to remain running since we are sending commands to it to
+    #Make sure we don't shut down the vCenter server or StarWind storage VMs. The 
+    #vCenter server needs to remain running since we are sending commands to it to
     #shut down the running VMs. The StarWind VMs need to remain running since they
     #provide the storage to each ESXi host that the VMs are running on.
     if (!$ignoredVMNames.Contains($vm.Name)) {
@@ -629,7 +634,7 @@ ForEach ($vm in $poweredOnVMs) {
 Write-Log -Line "Sending graceful shutdown commands to VMs...done"
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #VMs will probably take a few minutes to shut down. Wait before proceeding. How much
 #time it will take for all your VMs to shutdown gracefully is hard to determine, so
 #you will probably have to play with this value a bit.
@@ -638,7 +643,7 @@ Start-Sleep $config.WaitForGracefulShutdownDelay
 Write-Log -Line "Waiting for VMs to gracefully shut down, sleeping for $($config.WaitForGracefulShutdownDelay) seconds...done"
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Iterate through VMs again checking if any are still running. If any are running,
 #power them off. This is a non-graceful shutdown and is done because we want to have
 #all VMs powered off before shutting down vCenter, the ESXi hosts, or the StarWind
@@ -657,8 +662,8 @@ Write-Log -Line "Getting list of still-running VMs in cluster $($config.VCenter.
 
 Write-Log -Line "Sending power-off shutdown commands to any still-running VMs in cluster $($config.VCenter.ClusterName)..."
 ForEach ( $vm in $poweredOnVMs2 ) {
-    #Make sure we don't shut down the vcenter server or starwind storage VMs.
-    #The vCenter server needs to remain running since we are sending commands to it to
+    #Make sure we don't shut down the vCenter server or StarWind storage VMs. The 
+    #vCenter server needs to remain running since we are sending commands to it to
     #shut down the running VMs. The StarWind VMs need to remain running since they
     #provide the storage to each ESXi host that the VMs are running on.
     if (!$ignoredVMNames.Contains($vm.Name)) {
@@ -675,7 +680,7 @@ ForEach ( $vm in $poweredOnVMs2 ) {
 Write-Log -Line "Sending power-off shutdown commands to any still-running VMs in cluster $($config.VCenter.ClusterName)...done"
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Wait a short amount of time for VMs to be powered off. Non-graceful power-offs should
 #happen pretty quickly.
 Write-Log -Line "Waiting for VMs to power off, sleeping for $($config.WaitForNonGracefulDelay) seconds..."
@@ -683,10 +688,10 @@ Start-Sleep $config.WaitForNonGracefulDelay
 Write-Log -Line "Waiting for VMs to power off, sleeping for $($config.WaitForNonGracefulDelay) seconds...done"
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Shut down vCenter server. It should be the only VM, outside the StarWind storage VMs,
-#that is still running.  This is okay to shut down now since we will connect to the
-#hosts to shut them down (and their respective StarWind storage VMs).
+#that is still running. This is okay to shut down now since we will connect to the
+#hosts directly to shut them down (and their respective StarWind storage VMs).
 Write-Log -Line "Shut down vCenter server..."
 if ($config.DoVcenterShutdown) {
     Shutdown-VMGuest $config.VCenter.VMName -Confirm:$false
@@ -697,19 +702,19 @@ else {
 }
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Wait for vCenter server to shut down. This can typically take some time.
 Write-Log -Line "Waiting for vCenter to gracefully shut down, sleeping for $($config.WaitForvCenterShutdownDelay) seconds..."
 Start-Sleep $config.WaitForvCenterShutdownDelay
 Write-Log -Line "Waiting for vCenter to gracefully shut down, sleeping for $($config.WaitForvCenterShutdownDelay) seconds...done"
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Put StarWind devices (storage HA images) into Maintance Mode. Note that this is not
 #vSphere maintance mode. The StarWind powershell module must be installed via the
 #StarWind Management Console installer. Putting StarWind into maintance mode will
 #prevent storage related issues, possible corruption, and avoids long resynchronization
-#when the infrastructure is restarted.  We only need to interface with one StarWind
+#when the infrastructure is restarted. We only need to interface with one StarWind
 #VM here (one IP address) as putting the storage device into maintance mode will affect
 #both StarWind VMs. Once the storage devices are in maintance mode, the two storage
 #VMs will be synchronzied (matching data on both) and nothing will be able to read or
@@ -755,7 +760,7 @@ finally {
 Write-Log -Line "Putting StarWind into maintance mode...done"
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Shut down the ESXi hosts. This will also shut down the StarWind storage VMs and should
 #do so gracefully.
 Write-Log -Line "Shut down ESXi1..."
@@ -768,8 +773,8 @@ else {
 }
 Write-Log -Line "Shut down ESXi1...done"
 
-#Sleep for a few seconds just so both hosts are going down at the exact same time. Is this
-#really needed, probably not.
+#Sleep for a few seconds just so both hosts are going down at the exact same time. Is 
+#this really needed, probably not.
 Write-Log -Line "Waiting for ESXi1 to shut down, sleeping for $($config.WaitBetweenHostShutdowns) seconds..."
 Start-Sleep $config.WaitBetweenHostShutdowns
 Write-Log -Line "Waiting for ESXi1 to shut down, sleeping for $($config.WaitBetweenHostShutdowns) seconds...done"
@@ -785,6 +790,6 @@ else {
 Write-Log -Line "Shut down ESXi2...done"
 
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #Done.  All VMs and hosts have been turned off.
 Write-Log -Line "Shutdown infrastructure because of utility power failure...done"
