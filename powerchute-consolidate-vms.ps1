@@ -306,6 +306,11 @@ Write-Log -Line " StarWind Second Host: $($config.StarWind.VM2Name)"
 
 
 #------------------------------------------------------------------------------------
+#Make sure the powershell modules are imported
+Import-Module VMware.PowerCLI
+
+
+#------------------------------------------------------------------------------------
 #Send email alert that this script is running.
 #Note taht Send-MailMessage is obsolete but it still works as of now. This is way easier
 #than having to import a third-party mail client for powershell.

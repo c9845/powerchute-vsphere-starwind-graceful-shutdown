@@ -505,6 +505,12 @@ if ($config.DoStarWindMaintance -and !$config.DoVcenterShutdown) {
 
 
 #------------------------------------------------------------------------------------
+#Make sure the powershell modules are imported.
+Import-Module VMware.PowerCLI
+Import-Module StarWindX
+
+
+#------------------------------------------------------------------------------------
 #Send email alert that this script is running.
 #Note taht Send-MailMessage is obsolete but it still works as of now. This is way easier
 #than having to import a third-party mail client for powershell.
@@ -719,7 +725,6 @@ Write-Log -Line "Waiting for vCenter to gracefully shut down, sleeping for $($co
 #both StarWind VMs. Once the storage devices are in maintance mode, the two storage
 #VMs will be synchronzied (matching data on both) and nothing will be able to read or
 #write to the storage (which is why it is important to turn off all VMs before this).
-Import-Module StarWindX
 Write-Log -Line "Putting StarWind into maintance mode..."
 try {
     $starwindServer = New-SWServer -host $config.StarWind.VM1IP -port 3261 -user $config.StarWind.Username -password $config.StarWind.Password
